@@ -5,41 +5,35 @@ import (
     "regexp"
     "io/ioutil"
     "encoding/json"
+    "os"
+    "strings"
 )
 
 type Champion struct { 
     name string     // champ name
     winrate string  // win percent
     total string    // total games
-    mastery string  // mastery points
+    mastery string  // mastery level
     score string    // total mastery score
 }
 var bestCounters []Champion
+var champMastList []Champion
+var combined []Champion
 
 func main() {
-    //counters := ugg("graves")
-    // counters := []Champion {
-    //     { name: "Ivern", winrate: "54.96% WR", total: "655 games", mastery: "", score: "", }, 
-    //     { name: "Nunu & Willump", winrate: "54.9% WR", total: "1,550 games", mastery: "", score: "", }, 
-    //     { name: "Udyr", winrate: "53.88% WR", total: "1,197 games", mastery: "", score: "", },
-    //     { name: "Evelynn", winrate: "53.5% WR", total: "2,529 games", mastery: "", score: "", }, 
-    //     { name: "Bel'Veth", winrate: "52.75% WR", total: "2,749 games", mastery: "", score: "", }, 
-    //     { name: "Poppy", winrate: "52.69% WR", total: "1,300 games", mastery: "", score: "", }, 
-    //     { name:"Nidalee", winrate: "52.62% WR", total: "5,722 games", mastery: "", score: "", }, 
-    //     { name: "Fiddlesticks", winrate: "52.46% WR", total: "1,704 games", mastery: "", score: "", }, 
-    //     { name: "Talon", winrate: "52.25% WR", total: "911 games", mastery: "", score: "", }, 
-    //     { name: "Kindred", winrate: "51.6% WR", total: "1,469 games", mastery: "", score: "", },
-    // }
-    //printList(counters)
-
-    //championMastery("vex")
-        
-    //fmt.Println(bestCounters)
+    args := os.Args
+    cname := args[1]
+    //fmt.Println(cname)
+    counters, role := ugg(cname)
     cons := getConfigs()
-    championMastery(cons)
-    //tryThings("lux")
-    //ugg("zed")
-
+    ml := championMastery(cons)
+    list := combineLists(counters, ml)
+    if (role != "") {
+        fmt.Printf("\n%s's best counters in %s are\n", strings.Title(cname), role)
+    } else {
+        fmt.Println("\nI didn't find anything about that champion, please check the spelling.\nDon't include spaces or apostrophes.\nNunu and Willump is just 'nunu'")
+    }
+    printList(list)
 }
 
 type Config struct {
@@ -52,25 +46,18 @@ func getConfigs() Config {
 	if err != nil {
 		fmt.Println(err)
 	}
-    fmt.Println(content)
     err = json.Unmarshal(content, &config)
 	if err != nil {
 		fmt.Println(err)
 	}
-    fmt.Println(config)
     return config
 }
-func tryThings(champ string) {
 
 
-}
-
-func ugg(champ string) []Champion {
+func ugg(champ string) ([]Champion, string) {
     var role string
     c := colly.NewCollector()
     c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
-    fmt.Println("colly ", c) 
-
 
     c.OnRequest(func(r *colly.Request) { 
         fmt.Println("Visiting: ", r.URL) 
@@ -81,7 +68,7 @@ func ugg(champ string) []Champion {
     }) 
      
     c.OnResponse(func(r *colly.Response) { 
-        fmt.Println("Page visited: ", r.Request.URL) 
+        //fmt.Println("Page visited: ", r.Request.URL) 
     }) 
      
     c.OnHTML(".role-value", func(e *colly.HTMLElement) {
@@ -90,38 +77,28 @@ func ugg(champ string) []Champion {
     })
     c.OnHTML(".counters-list .best-win-rate", func(e *colly.HTMLElement) {
         c := Champion{}
-        //fmt.Println(e.ChildText(".champion-name")) 
         c.name = e.ChildText(".champion-name")
-        //fmt.Println("winrate", e.ChildText(".win-rate"))
         c.winrate = e.ChildText(".win-rate")
-        //fmt.Println(e.ChildText(".total-games"))
         c.total = e.ChildText(".total-games")
         bestCounters = append(bestCounters, c)
-        //fmt.Println(bestCounters)
     })
      
     c.OnScraped(func(r *colly.Response) { 
-        fmt.Println(r.Request.URL, " scraped!")
+        //fmt.Println(r.Request.URL, " scraped!")
     })
     url := fmt.Sprintf("https://u.gg/lol/champions/%s/counter", champ)
     err := c.Visit(url)
-    //c.Visit("https://scrapeme.live/shop/")
 
     if err != nil {
         fmt.Printf("failed to visit url: %v\n", err)
-        return nil
+        return nil, ""
     }
-    fmt.Printf("%s's best counters in %s are\n", champ, role)
-    fmt.Println(bestCounters)
-    return bestCounters
-    //fmt.Println(bestCounters)
+    return bestCounters, role
 }
 
-func championMastery(configs Config) {
+func championMastery(configs Config) []Champion {
     c := colly.NewCollector()
     c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
-    fmt.Println("colly ", c) 
-
 
     c.OnRequest(func(r *colly.Request) { 
         fmt.Println("Visiting: ", r.URL) 
@@ -132,14 +109,15 @@ func championMastery(configs Config) {
     }) 
      
     c.OnResponse(func(r *colly.Response) { 
-        fmt.Println("Page visited: ", r.Request.URL) 
+        //fmt.Println("Page visited: ", r.Request.URL) 
     }) 
      
     re := regexp.MustCompile("[0-9]+")
-    
+    cm := Champion{} 
 
     c.OnHTML("tr", func(e *colly.HTMLElement) {
-        fmt.Printf("champ is %s ---- ", e.ChildText(".internalLink")) // role
+        //fmt.Printf("champ is %s ---- ", e.ChildText(".internalLink")) // role
+        cm.name = e.ChildText(".internalLink")
         text := e.ChildText("td")
         nums := re.FindAllString(text, 1)
         if len(nums) > 0 {
@@ -148,53 +126,68 @@ func championMastery(configs Config) {
             var score string
             if len(txt) > 0 {
                 level = txt[0:1]
+                cm.mastery = level
                 score = txt[1:]
+                cm.score = score
+                champMastList = append(champMastList, cm)
             }
-            fmt.Printf("nums[0]: %s\n", nums[0])
-            fmt.Printf("level: %s, mastery score: %s\n", level, score)
         }
-       
-        
-
-        // printing all URLs associated with the a links in the page 
-        //fmt.Println("%v", e.Attr("href"))
-
     })
-    // c.OnHTML(".counters-list .best-win-rate", func(e *colly.HTMLElement) {
-    //     c := Champion{}
-    //     //fmt.Println(e.ChildText(".champion-name")) 
-    //     c.name = e.ChildText(".champion-name")
-    //     //fmt.Println("winrate", e.ChildText(".win-rate"))
-    //     c.winrate = e.ChildText(".win-rate")
-    //     //fmt.Println(e.ChildText(".total-games"))
-    //     c.total = e.ChildText(".total-games")
-    //     bestCounters = append(bestCounters, c)
-    // })
      
     c.OnScraped(func(r *colly.Response) { 
-        fmt.Println(r.Request.URL, " scraped!")
+        //fmt.Println(r.Request.URL, " scraped!")
     })
-    fmt.Println("cons: ", configs)
     url := fmt.Sprintf("https://championmastery.gg/summoner?summoner=%s&region=NA&lang=en_US", configs.SummonerName)
     err := c.Visit(url)
-    //c.Visit("https://scrapeme.live/shop/")
 
     if err != nil {
         fmt.Printf("failed to visit url: %v\n", err)
-        return
+        return nil
       }
-    //fmt.Println(champ)
-    //fmt.Println(bestCounters)
+    return champMastList
+}
+
+func combineLists(c []Champion, ml []Champion) []Champion {
+    for _, ch := range c {
+        found := false
+        for _, m := range ml {
+            if m.name == ch.name {
+                nc := Champion{}
+                nc.name = ch.name
+                nc.winrate = ch.winrate
+                nc.total = ch.total
+                nc.mastery = m.mastery
+                nc.score = m.score
+                combined = append(combined, nc)
+                found = true
+                break
+            }
+        }
+        if (found == false) {
+            nc := Champion{}
+            nc.name = ch.name
+            nc.winrate = ch.winrate
+            nc.total = ch.total
+            nc.mastery = "0"
+            nc.score = "0"
+            combined = append(combined, nc)
+        }
+    }
+    return combined
 }
 
 func printList(champList []Champion) {
     var output string
     for _, ch := range champList {
         tab := "\t"
+        tab2 := "\t"
         if len(ch.name) < 8 {
             tab = tab + "\t"
         }
-        output = output + fmt.Sprintf("%s%s%s\t%s\n", ch.name, tab, ch.winrate, ch.total)
+        if len(ch.total) < 10 {
+            tab2 = tab2 + "\t"
+        }
+        output = output + fmt.Sprintf("%s%s%s in %s%s mastery %s with %s pts\n", ch.name, tab, ch.winrate, ch.total, tab2, ch.mastery, ch.score)
     }
     fmt.Println(output)
 }
