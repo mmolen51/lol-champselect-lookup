@@ -27,11 +27,15 @@ func main() {
     counters, role := ugg(cname)
     cons := getConfigs()
     ml := championMastery(cons)
+    if len(ml) == 0 {
+        fmt.Println("\nI didn't find your summoner name. Please re-enter it with\nlol ign <summoner name>")
+        return
+    }
     list := combineLists(counters, ml)
     if (role != "") {
         fmt.Printf("\n%s's best counters in %s are\n", strings.Title(cname), role)
     } else {
-        fmt.Println("\nI didn't find anything about that champion, please check the spelling.\nDon't include spaces or apostrophes.\nNunu and Willump is just 'nunu'")
+        fmt.Println("\nI didn't find anything about that champion, please check the spelling.\nDon't include spaces or apostrophes.\n\nTo use, type\nlol <champ name>\n\nexamples:\nlol lux\nlol kaisa\nlol nunu\n")
     }
     printList(list)
 }
@@ -137,7 +141,8 @@ func championMastery(configs Config) []Champion {
     c.OnScraped(func(r *colly.Response) { 
         //fmt.Println(r.Request.URL, " scraped!")
     })
-    url := fmt.Sprintf("https://championmastery.gg/summoner?summoner=%s&region=NA&lang=en_US", configs.SummonerName)
+    sn := strings.Replace(configs.SummonerName, " ", "+", -1)
+    url := fmt.Sprintf("https://championmastery.gg/summoner?summoner=%s&region=NA&lang=en_US", sn)
     err := c.Visit(url)
 
     if err != nil {
